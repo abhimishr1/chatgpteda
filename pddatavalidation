@@ -1,0 +1,34 @@
+import json
+import pandas as pd
+
+# === 1️⃣ Load and flatten your JSON ===
+input_path = "data.json"  # change this to your file path
+
+with open(input_path, "r") as f:
+    data = json.load(f)
+
+df = pd.json_normalize(data, sep=".")
+
+print(f"\n✅ Loaded {len(df)} records with {len(df.columns)} fields\n")
+
+# === 2️⃣ Compute column completeness & uniqueness ===
+summary = []
+for col in df.columns:
+    null_ratio = df[col].isna().mean()
+    unique_ratio = df[col].nunique(dropna=True) / len(df)
+
+    summary.append({
+        "column": col,
+        "always_has_value": null_ratio == 0.0,
+        "is_unique": unique_ratio == 1.0,
+        "null_ratio": round(null_ratio, 3),
+        "unique_ratio": round(unique_ratio, 3)
+    })
+
+summary_df = pd.DataFrame(summary).sort_values(by=["null_ratio", "unique_ratio"], ascending=[True, False])
+
+print("\n📊 Column Summary:\n")
+print(summary_df.to_string(index=False))
+
+summary_df.to_csv("json_field_analysis.csv", index=False)
+print("\n💾 Saved results to 'json_field_analysis.csv'\n")
