@@ -1,48 +1,30 @@
 import json
 import pandas as pd
-import great_expectations as ge
+from great_expectations.validator.validator import Validator
+from great_expectations.core.batch import Batch
+from great_expectations.execution_engine.pandas_execution_engine import PandasExecutionEngine
 
-# === 1️⃣ Load and flatten the JSON ===
-input_path = "data.json"  # change this to your file path
-
-with open(input_path, "r") as f:
+# Load and flatten JSON
+with open("data.json") as f:
     data = json.load(f)
-
-# Flatten deeply nested JSON into a flat DataFrame
 df = pd.json_normalize(data, sep=".")
 
-print(f"\n✅ Loaded {len(df)} records with {len(df.columns)} fields\n")
+# Create a minimal in-memory Validator
+engine = PandasExecutionEngine()
+batch = Batch(data=df)
+validator = Validator(execution_engine=engine, batches=[batch])
 
-# === 2️⃣ Wrap DataFrame with Great Expectations ===
-ge_df = ge.from_pandas(df)
-
-# === 3️⃣ Analyze columns ===
 summary = []
-
 for col in df.columns:
-    # Expect column values to not be null
-    null_result = ge_df.expect_column_values_to_not_be_null(col)
-    # Expect column values to be unique
-    unique_result = ge_df.expect_column_values_to_be_unique(col)
-
-    null_ratio = df[col].isna().mean()
-    unique_ratio = df[col].nunique() / len(df)
-
+    res_not_null = validator.expect_column_values_to_not_be_null(col)
+    res_unique = validator.expect_column_values_to_be_unique(col)
     summary.append({
         "column": col,
-        "always_has_value": null_result["success"],
-        "is_unique": unique_result["success"],
-        "null_ratio": round(null_ratio, 3),
-        "unique_ratio": round(unique_ratio, 3)
+        "always_has_value": res_not_null.success,
+        "is_unique": res_unique.success,
+        "null_ratio": df[col].isna().mean(),
+        "unique_ratio": df[col].nunique() / len(df)
     })
 
-# === 4️⃣ Show summary ===
 summary_df = pd.DataFrame(summary)
-summary_df = summary_df.sort_values(by=["null_ratio", "unique_ratio"], ascending=[True, False])
-
-print("\n📊 Column Summary:\n")
-print(summary_df.to_string(index=False))
-
-# === 5️⃣ Optionally save ===
-summary_df.to_csv("json_field_analysis.csv", index=False)
-print("\n💾 Saved detailed results to 'json_field_analysis.csv'\n")
+print(summary_df)
